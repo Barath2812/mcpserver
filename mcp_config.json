@@ -1,0 +1,14 @@
+{
+    "mcpServers": {
+        "web-scraper": {
+            "command": "python",
+            "args": [
+                "mcp_server.py"
+            ],
+            "cwd": "d:\\mcp",
+            "env": {
+                "PYTHONPATH": "d:\\mcp"
+            }
+        }
+    }
+}
