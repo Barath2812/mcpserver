@@ -12,7 +12,7 @@ sys.path.insert(0, 'd:\\mcp')
 from antigravity.user_agents import get_random_user_agent
 from antigravity.throttle import random_delay, get_rate_limiter
 from antigravity.robots_validator import is_allowed
-
+3
 
 @dataclass
 class ScrapedContent:

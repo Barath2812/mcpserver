@@ -144,3 +144,67 @@ class ScrapeResponse(BaseModel):
                 "mongo_id": "65a5b2c3d4e5f6a7b8c9d0e1"
             }
         }
+
+
+# ===============================
+# Research Paper Models
+# ===============================
+
+class PaperSummaryModel(BaseModel):
+    """Model for AI-generated paper summary."""
+    summary: str = ""
+    key_findings: str = ""
+    methodology: str = ""
+    conclusions: str = ""
+    raw_summary: str = ""
+
+
+class PaperModel(BaseModel):
+    """
+    Model for a research paper document stored in MongoDB.
+    """
+    title: str
+    authors: List[str] = Field(default_factory=list)
+    abstract: str = ""
+    source: str = ""  # "arxiv" or "semantic_scholar"
+    pdf_url: Optional[str] = None
+    local_path: Optional[str] = None
+    extracted_text: str = ""
+    summary: Optional[PaperSummaryModel] = None
+    topic: str = ""
+    year: Optional[int] = None
+    citation_count: Optional[int] = None
+    categories: List[str] = Field(default_factory=list)
+    paper_id: str = ""
+    arxiv_id: Optional[str] = None
+    published: Optional[str] = None
+    stored_at: Optional[str] = None
+
+
+class ResearchRequest(BaseModel):
+    """Request model for research search endpoint."""
+    query: str
+    max_results: int = 10
+    sources: str = "both"  # "arxiv", "semantic_scholar", or "both"
+    download_pdfs: bool = True
+    summarize: bool = True
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "query": "computer vision in healthcare",
+                "max_results": 10,
+                "sources": "both",
+                "download_pdfs": True,
+                "summarize": True,
+            }
+        }
+
+
+class ResearchResponse(BaseModel):
+    """Response model for research endpoints."""
+    success: bool
+    query: str = ""
+    papers: List[dict] = Field(default_factory=list)
+    stats: dict = Field(default_factory=dict)
+    message: str = ""

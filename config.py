@@ -1,14 +1,39 @@
 """
-Configuration settings for the Web Scraping Platform.
+Configuration settings for the AI Research & Web Scraping Platform.
 """
 import os
 from typing import List
+from dotenv import load_dotenv
+
+# Load .env file
+load_dotenv()
 
 # MongoDB Configuration
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
 MONGODB_DATABASE = "web_scraper_db"
 MONGODB_SCRAPED_COLLECTION = "scraped_data"
 MONGODB_LOGS_COLLECTION = "scrape_logs"
+MONGODB_PAPERS_COLLECTION = "research_papers"
+
+# ======================
+# Research Configuration
+# ======================
+
+# LLM API Keys
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+
+# arXiv API
+ARXIV_API_URL = "http://export.arxiv.org/api/query"
+
+# Semantic Scholar API
+SEMANTIC_SCHOLAR_API_URL = "https://api.semanticscholar.org/graph/v1"
+
+# Paper download directory
+PAPERS_DOWNLOAD_DIR = os.path.join(os.path.dirname(__file__), "papers")
+
+# Default max results per source
+DEFAULT_MAX_PAPER_RESULTS = 10
 
 # Rate Limiting Configuration
 MAX_REQUESTS_PER_DOMAIN_PER_MINUTE = 10

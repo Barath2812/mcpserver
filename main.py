@@ -1,7 +1,7 @@
 """
-AI-Driven Universal Web Data Extraction Platform
+AI Research Assistant & Web Data Extraction Platform
 
-FastAPI server with MCP integration for web scraping.
+FastAPI server with MCP integration for web scraping + intelligent research pipeline.
 """
 import asyncio
 from typing import Optional
@@ -18,25 +18,35 @@ import sys
 sys.path.insert(0, 'd:\\mcp')
 
 from config import SERVER_HOST, SERVER_PORT
-from database.models import ScrapeRequest, ScrapeResponse, ContentModel, MetadataModel
+from database.models import (
+    ScrapeRequest, ScrapeResponse, ContentModel, MetadataModel,
+    ResearchRequest, ResearchResponse,
+)
 from database.mongodb import get_mongodb_client
 from scraper_mcp.tools import scrape_website_tool
 from utils.exporter import export_to_csv, export_to_json
+from research.pipeline import (
+    search_all_sources,
+    run_research_pipeline,
+    run_deep_analysis_pipeline,
+)
+from research.summarizer import summarize_text
+from research.research_analyzer import deep_analyze_paper
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     # Startup
-    print("🚀 Starting Web Scraper MCP Server...")
-    print(f"📊 MongoDB: Connecting...")
+    print("[*] Starting AI Research Assistant Server...")
+    print(f"[-] MongoDB: Connecting...")
     
     try:
         client = get_mongodb_client()
         client.connect()
-        print("✅ MongoDB: Connected")
+        print("[+] MongoDB: Connected")
     except Exception as e:
-        print(f"⚠️ MongoDB: Connection failed - {e}")
+        print(f"[!] MongoDB: Connection failed - {e}")
     
     yield
     
@@ -48,27 +58,28 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI app
 app = FastAPI(
-    title="AI-Driven Universal Web Data Extraction Platform",
+    title="AI Research Assistant & Web Data Extraction Platform",
     description="""
-    A production-grade, MCP-enabled universal web scraping platform with MongoDB storage
-    and advanced anti-bot (antigravity) mechanisms.
+    A production-grade AI research assistant with MCP integration.
     
     ## Features
     
-    - **Static Scraping**: Uses Requests + BeautifulSoup for traditional HTML pages
-    - **Dynamic Scraping**: Uses Playwright for JavaScript-rendered pages
+    ### 🧠 Research Assistant (NEW)
+    - **arXiv Search**: Search 2M+ open-access papers
+    - **Semantic Scholar**: AI-ranked paper search with citations
+    - **PDF Processing**: Download & extract text from papers
+    - **AI Summarization**: Generate intelligent summaries with Gemini
+    - **Full Pipeline**: One-click research from query to summary
+    
+    ### 🌐 Web Scraper (Original)
+    - **Static Scraping**: Requests + BeautifulSoup for HTML pages
+    - **Dynamic Scraping**: Playwright for JavaScript-rendered pages
     - **Auto-Detection**: Automatically selects the appropriate scraper
-    - **Anti-Bot Protection**: User-Agent rotation, rate limiting, robots.txt compliance
-    - **MongoDB Storage**: Stores all scraped data with metadata
-    - **MCP Integration**: Expose scraping as tools for LLM invocation
-    
-    ## Ethical Considerations
-    
-    - Respects robots.txt directives
-    - Implements polite crawling with delays
-    - Rate limits requests per domain
+    - **Anti-Bot Protection**: User-Agent rotation, rate limiting
+    - **MongoDB Storage**: Stores all data with metadata
+    - **MCP Integration**: Expose as tools for LLM invocation
     """,
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -94,15 +105,9 @@ async def root():
     if os.path.exists(index_path):
         return FileResponse(index_path)
     return {
-        "name": "AI-Driven Universal Web Data Extraction Platform",
-        "version": "1.0.0",
+        "name": "AI Research Assistant",
+        "version": "2.0.0",
         "status": "running",
-        "endpoints": {
-            "scrape": "/scrape",
-            "stats": "/stats",
-            "recent": "/recent",
-            "docs": "/docs",
-        }
     }
 
 
@@ -110,11 +115,15 @@ async def root():
 async def api_info():
     """API information endpoint."""
     return {
-        "name": "AI-Driven Universal Web Data Extraction Platform",
-        "version": "1.0.0",
+        "name": "AI Research Assistant & Web Data Extraction Platform",
+        "version": "2.0.0",
         "status": "running",
         "endpoints": {
             "scrape": "/scrape",
+            "research_search": "/research/search",
+            "research_run": "/research/run",
+            "research_papers": "/research/papers",
+            "research_stats": "/research/stats",
             "stats": "/stats",
             "recent": "/recent",
             "docs": "/docs",
@@ -122,13 +131,132 @@ async def api_info():
     }
 
 
+# ===================================
+# RESEARCH ENDPOINTS (NEW)
+# ===================================
+
+@app.post("/research/search")
+async def research_search(request: ResearchRequest):
+    """
+    Search for academic papers across arXiv and Semantic Scholar.
+    Returns paper metadata without downloading PDFs.
+    """
+    try:
+        papers = search_all_sources(
+            query=request.query,
+            max_results=request.max_results,
+            sources=request.sources,
+        )
+        return {
+            "success": True,
+            "query": request.query,
+            "total": len(papers),
+            "papers": papers,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/research/run")
+async def research_run(request: ResearchRequest):
+    """
+    Run the full research pipeline:
+    Search → Download PDFs → Extract Text → AI Summarize → Store in MongoDB
+    """
+    try:
+        result = run_research_pipeline(
+            query=request.query,
+            max_results=request.max_results,
+            sources=request.sources,
+            download_pdfs=request.download_pdfs,
+            summarize=request.summarize,
+            store=True,
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/research/papers")
+async def get_research_papers(
+    topic: Optional[str] = Query(None, description="Filter by topic"),
+    search: Optional[str] = Query(None, description="Search in titles/abstracts"),
+    limit: int = Query(20, ge=1, le=100, description="Number of results"),
+):
+    """Get stored research papers."""
+    try:
+        client = get_mongodb_client()
+        if search:
+            papers = client.search_papers_text(search, limit=limit)
+        elif topic:
+            papers = client.get_papers_by_topic(topic, limit=limit)
+        else:
+            papers = client.get_recent_papers(limit=limit)
+        return {"success": True, "total": len(papers), "papers": papers}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/research/paper/{paper_id}")
+async def get_research_paper(paper_id: str):
+    """Get a single research paper by ID."""
+    try:
+        client = get_mongodb_client()
+        paper = client.get_paper_by_id(paper_id)
+        if not paper:
+            raise HTTPException(status_code=404, detail="Paper not found")
+        return {"success": True, "paper": paper}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/research/summarize")
+async def summarize_paper_text(
+    paper_id: Optional[str] = Query(None, description="Paper MongoDB ID to summarize"),
+    text: Optional[str] = None,
+):
+    """Summarize a paper by ID or provided text."""
+    try:
+        if paper_id:
+            client = get_mongodb_client()
+            paper = client.get_paper_by_id(paper_id)
+            if not paper:
+                raise HTTPException(status_code=404, detail="Paper not found")
+            text_to_summarize = paper.get("extracted_text") or paper.get("abstract", "")
+            title = paper.get("title", "")
+        elif text:
+            text_to_summarize = text
+            title = ""
+        else:
+            raise HTTPException(status_code=400, detail="Provide paper_id or text")
+
+        summary = summarize_text(text_to_summarize, title=title)
+        return {"success": True, "summary": summary}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/research/stats")
+async def get_research_stats():
+    """Get research statistics."""
+    try:
+        client = get_mongodb_client()
+        return client.get_research_stats()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===================================
+# ORIGINAL SCRAPER ENDPOINTS
+# ===================================
+
 @app.post("/scrape", response_model=ScrapeResponse)
 async def scrape_website(request: ScrapeRequest):
-    """
-    Scrape a website and store the results in MongoDB.
-    
-    This endpoint is also exposed as an MCP tool for LLM invocation.
-    """
+    """Scrape a website and store the results in MongoDB."""
     try:
         result = scrape_website_tool(
             url=request.url,
@@ -158,9 +286,7 @@ async def scrape_website_get(
     dynamic: bool = Query(False, description="Force dynamic scraping"),
     auto_detect: bool = Query(True, description="Auto-detect scraper type"),
 ):
-    """
-    Scrape a website using GET request (convenience endpoint).
-    """
+    """Scrape a website using GET request (convenience endpoint)."""
     try:
         result = scrape_website_tool(
             url=url,
@@ -245,7 +371,6 @@ async def health_check():
     """Health check endpoint."""
     try:
         client = get_mongodb_client()
-        # Try a simple operation
         client.db.command("ping")
         mongodb_status = "connected"
     except:
@@ -254,7 +379,102 @@ async def health_check():
     return {
         "status": "healthy",
         "mongodb": mongodb_status,
+        "version": "2.0.0",
     }
+
+
+# ===== RESEARCH INTELLIGENCE ENDPOINTS =====
+
+@app.post("/research/analyze/{paper_id}")
+async def analyze_paper(paper_id: str):
+    """Deep-analyze a stored paper by its MongoDB ID."""
+    try:
+        client = get_mongodb_client()
+        paper = client.get_paper_by_id(paper_id)
+        if not paper:
+            raise HTTPException(status_code=404, detail="Paper not found")
+        
+        text = paper.get("extracted_text") or paper.get("abstract", "")
+        title = paper.get("title", "")
+        
+        result = deep_analyze_paper(text, title=title)
+        return {"paper_id": paper_id, "title": title, "analysis": result}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/research/literature-review")
+async def generate_lit_review(
+    topic: str = Query(..., description="Research topic"),
+    max_papers: int = Query(15, ge=1, le=30, description="Papers to analyze"),
+):
+    """Generate a literature review on a topic."""
+    try:
+        result = run_deep_analysis_pipeline(
+            query=topic,
+            max_results=max_papers,
+            analysis_type="literature_review",
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/research/gaps")
+async def find_gaps(
+    topic: str = Query(..., description="Research topic"),
+    max_papers: int = Query(15, ge=1, le=30, description="Papers to analyze"),
+):
+    """Find research gaps and opportunities for uniqueness."""
+    try:
+        result = run_deep_analysis_pipeline(
+            query=topic,
+            max_results=max_papers,
+            analysis_type="gaps",
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/research/ideas")
+async def generate_ideas(
+    topic: str = Query(..., description="Research topic"),
+    user_goal: str = Query("", description="User's specific goal"),
+    max_papers: int = Query(15, ge=1, le=30, description="Papers to analyze"),
+):
+    """Generate novel research ideas based on gaps and landscape."""
+    try:
+        result = run_deep_analysis_pipeline(
+            query=topic,
+            max_results=max_papers,
+            user_goal=user_goal,
+            analysis_type="ideas",
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/research/advisor")
+async def research_advisor(
+    topic: str = Query(..., description="Research topic"),
+    user_goal: str = Query("", description="User's specific goal"),
+    max_papers: int = Query(15, ge=1, le=30, description="Papers to analyze"),
+):
+    """Full research advisory: landscape + gaps + uniqueness + ideas + action plan."""
+    try:
+        result = run_deep_analysis_pipeline(
+            query=topic,
+            max_results=max_papers,
+            user_goal=user_goal,
+            analysis_type="full",
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 def run_server():

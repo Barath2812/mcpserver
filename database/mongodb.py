@@ -14,6 +14,7 @@ from config import (
     MONGODB_DATABASE,
     MONGODB_SCRAPED_COLLECTION,
     MONGODB_LOGS_COLLECTION,
+    MONGODB_PAPERS_COLLECTION,
 )
 
 
@@ -68,6 +69,11 @@ class MongoDBClient:
     def scrape_logs(self) -> Collection:
         """Get the scrape_logs collection."""
         return self.db[MONGODB_LOGS_COLLECTION]
+    
+    @property
+    def research_papers(self) -> Collection:
+        """Get the research_papers collection."""
+        return self.db[MONGODB_PAPERS_COLLECTION]
     
     def insert_scraped_data(self, data: Dict[str, Any]) -> str:
         """
@@ -195,6 +201,87 @@ class MongoDBClient:
             "success_rate": round(success_count / total_logs * 100, 2) if total_logs > 0 else 0,
         }
     
+    # ===============================
+    # Research Paper Methods
+    # ===============================
+    
+    def insert_paper(self, paper_data: Dict[str, Any]) -> str:
+        """Insert a research paper into MongoDB."""
+        result = self.research_papers.insert_one(paper_data)
+        return str(result.inserted_id)
+    
+    def insert_papers(self, papers: List[Dict[str, Any]]) -> List[str]:
+        """Bulk insert research papers."""
+        if not papers:
+            return []
+        result = self.research_papers.insert_many(papers)
+        return [str(id) for id in result.inserted_ids]
+    
+    def get_paper_by_id(self, paper_id: str) -> Optional[Dict[str, Any]]:
+        """Get a paper by its MongoDB _id."""
+        from bson import ObjectId
+        try:
+            document = self.research_papers.find_one({"_id": ObjectId(paper_id)})
+            if document:
+                document["_id"] = str(document["_id"])
+            return document
+        except Exception:
+            return None
+    
+    def get_papers_by_topic(self, topic: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """Get papers by topic/query."""
+        cursor = self.research_papers.find(
+            {"topic": {"$regex": topic, "$options": "i"}}
+        ).sort("stored_at", -1).limit(limit)
+        documents = []
+        for doc in cursor:
+            doc["_id"] = str(doc["_id"])
+            documents.append(doc)
+        return documents
+    
+    def get_recent_papers(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """Get recently stored papers."""
+        cursor = self.research_papers.find(
+            {}, {"extracted_text": 0}  # Exclude large text field
+        ).sort("stored_at", -1).limit(limit)
+        documents = []
+        for doc in cursor:
+            doc["_id"] = str(doc["_id"])
+            documents.append(doc)
+        return documents
+    
+    def search_papers_text(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
+        """Search papers by title or abstract text."""
+        cursor = self.research_papers.find(
+            {"$or": [
+                {"title": {"$regex": query, "$options": "i"}},
+                {"abstract": {"$regex": query, "$options": "i"}},
+            ]},
+            {"extracted_text": 0}
+        ).sort("stored_at", -1).limit(limit)
+        documents = []
+        for doc in cursor:
+            doc["_id"] = str(doc["_id"])
+            documents.append(doc)
+        return documents
+    
+    def get_research_stats(self) -> Dict[str, Any]:
+        """Get research statistics."""
+        total_papers = self.research_papers.count_documents({})
+        arxiv_count = self.research_papers.count_documents({"source": "arxiv"})
+        ss_count = self.research_papers.count_documents({"source": "semantic_scholar"})
+        
+        # Get unique topics
+        topics = self.research_papers.distinct("topic")
+        
+        return {
+            "total_papers": total_papers,
+            "arxiv_papers": arxiv_count,
+            "semantic_scholar_papers": ss_count,
+            "topics": topics,
+            "unique_topics": len(topics),
+        }
+    
     def clear_all(self) -> Dict[str, int]:
         """
         Clear all data (for testing purposes).
@@ -204,9 +291,11 @@ class MongoDBClient:
         """
         scraped_deleted = self.scraped_data.delete_many({}).deleted_count
         logs_deleted = self.scrape_logs.delete_many({}).deleted_count
+        papers_deleted = self.research_papers.delete_many({}).deleted_count
         return {
             "scraped_data_deleted": scraped_deleted,
             "logs_deleted": logs_deleted,
+            "papers_deleted": papers_deleted,
         }
 
 

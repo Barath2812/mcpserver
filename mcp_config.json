@@ -1,11 +1,10 @@
 {
     "mcpServers": {
-        "web-scraper": {
-            "command": "python",
+        "ai-research-assistant": {
+            "command": "d:\\mcp\\mcpvenv\\Scripts\\python.exe",
             "args": [
-                "mcp_server.py"
+                "d:\\mcp\\mcp_server.py"
             ],
-            "cwd": "d:\\mcp",
             "env": {
                 "PYTHONPATH": "d:\\mcp"
             }
